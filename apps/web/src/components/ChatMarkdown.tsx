@@ -9,17 +9,15 @@ import React, {
   Suspense,
   isValidElement,
   use,
-  useCallback,
-  memo,
   useEffect,
+  memo,
   useMemo,
-  useRef,
-  useState,
   type ReactNode,
 } from "react";
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
@@ -27,6 +25,7 @@ import { useTheme } from "../hooks/useTheme";
 import { resolveMarkdownFileLinkTarget } from "../markdown-links";
 import { readNativeApi } from "../nativeApi";
 import { preferredTerminalEditor } from "../terminal-links";
+import MermaidBlock from "./MermaidBlock";
 
 class CodeHighlightErrorBoundary extends React.Component<
   { fallback: ReactNode; children: ReactNode },
@@ -66,9 +65,16 @@ const highlighterPromiseCache = new Map<string, Promise<DiffsHighlighter>>();
 
 function extractFenceLanguage(className: string | undefined): string {
   const match = className?.match(CODE_FENCE_LANGUAGE_REGEX);
-  const raw = match?.[1] ?? "text";
+  return (match?.[1] ?? "text").toLowerCase();
+}
+
+function resolveHighlightLanguage(language: string): string {
   // Shiki doesn't bundle a gitignore grammar; ini is a close match (#685)
-  return raw === "gitignore" ? "ini" : raw;
+  return language === "gitignore" ? "ini" : language;
+}
+
+function isMermaidLanguage(language: string): boolean {
+  return language === "mermaid" || language === "mmd";
 }
 
 function nodeToPlainText(node: ReactNode): string {
@@ -136,36 +142,7 @@ function getHighlighterPromise(language: string): Promise<DiffsHighlighter> {
 }
 
 function MarkdownCodeBlock({ code, children }: { code: string; children: ReactNode }) {
-  const [copied, setCopied] = useState(false);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleCopy = useCallback(() => {
-    if (typeof navigator === "undefined" || navigator.clipboard == null) {
-      return;
-    }
-    void navigator.clipboard
-      .writeText(code)
-      .then(() => {
-        if (copiedTimerRef.current != null) {
-          clearTimeout(copiedTimerRef.current);
-        }
-        setCopied(true);
-        copiedTimerRef.current = setTimeout(() => {
-          setCopied(false);
-          copiedTimerRef.current = null;
-        }, 1200);
-      })
-      .catch(() => undefined);
-  }, [code]);
-
-  useEffect(
-    () => () => {
-      if (copiedTimerRef.current != null) {
-        clearTimeout(copiedTimerRef.current);
-        copiedTimerRef.current = null;
-      }
-    },
-    [],
-  );
+  const { copied, handleCopy } = useCopyToClipboard(code);
 
   return (
     <div className="chat-markdown-codeblock">
@@ -196,7 +173,7 @@ function SuspenseShikiCodeBlock({
   themeName,
   isStreaming,
 }: SuspenseShikiCodeBlockProps) {
-  const language = extractFenceLanguage(className);
+  const language = resolveHighlightLanguage(extractFenceLanguage(className));
   const cacheKey = createHighlightCacheKey(code, language, themeName);
   const cachedHighlightedHtml = !isStreaming ? highlightedCodeCache.get(cacheKey) : null;
 
@@ -268,6 +245,17 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
           return <pre {...props}>{children}</pre>;
         }
 
+        const fenceLanguage = extractFenceLanguage(codeBlock.className);
+        if (isMermaidLanguage(fenceLanguage)) {
+          return (
+            <MermaidBlock
+              code={codeBlock.code}
+              isStreaming={isStreaming}
+              resolvedTheme={resolvedTheme}
+            />
+          );
+        }
+
         return (
           <MarkdownCodeBlock code={codeBlock.code}>
             <CodeHighlightErrorBoundary fallback={<pre {...props}>{children}</pre>}>
@@ -284,7 +272,7 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
         );
       },
     }),
-    [cwd, diffThemeName, isStreaming],
+    [cwd, diffThemeName, isStreaming, resolvedTheme],
   );
 
   return (

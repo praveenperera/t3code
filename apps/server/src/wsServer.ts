@@ -736,7 +736,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                 headers: requestHeaders,
                 redirect: "manual",
               }),
-            catch: (cause) => new Error(`Failed to proxy dev request: ${String(cause)}`),
+            catch: (cause) =>
+              new RouteRequestError({
+                message: `Failed to proxy dev request: ${String(cause)}`,
+              }),
           }).pipe(Effect.exit);
           if (Exit.isFailure(upstreamResponseExit)) {
             respond(502, { "Content-Type": "text/plain; charset=utf-8" }, "Bad Gateway");
@@ -768,7 +771,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
           const responseBodyExit = yield* Effect.tryPromise({
             try: () => upstreamResponse.arrayBuffer(),
-            catch: (cause) => new Error(`Failed to read proxied dev response: ${String(cause)}`),
+            catch: (cause) =>
+              new RouteRequestError({
+                message: `Failed to read proxied dev response: ${String(cause)}`,
+              }),
           }).pipe(Effect.exit);
           if (Exit.isFailure(responseBodyExit)) {
             respond(502, { "Content-Type": "text/plain; charset=utf-8" }, "Bad Gateway");

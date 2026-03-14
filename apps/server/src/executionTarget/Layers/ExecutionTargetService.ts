@@ -244,11 +244,9 @@ const makeExecutionTargetService = Effect.gen(function* () {
           : Option.none();
 
       if (input.id === LOCAL_EXECUTION_TARGET_ID) {
-        return yield* Effect.fail(
-          new ExecutionTargetServiceError({
-            message: "The built-in local target cannot be modified.",
-          }),
-        );
+        return yield* new ExecutionTargetServiceError({
+          message: "The built-in local target cannot be modified.",
+        });
       }
 
       const targetId = input.id ?? targetIdFromLabel(input.label);
@@ -324,11 +322,9 @@ const makeExecutionTargetService = Effect.gen(function* () {
   const remove: ExecutionTargetServiceShape["remove"] = (input) =>
     Effect.gen(function* () {
       if (input.targetId === LOCAL_EXECUTION_TARGET_ID) {
-        return yield* Effect.fail(
-          new ExecutionTargetServiceError({
-            message: "The built-in local target cannot be removed.",
-          }),
-        );
+        return yield* new ExecutionTargetServiceError({
+          message: "The built-in local target cannot be removed.",
+        });
       }
 
       const existing = yield* getPersistedExisting(input.targetId);

@@ -113,11 +113,9 @@ const makeExecutionTargetRuntime = Effect.gen(function* () {
         });
       }
 
-      return yield* Effect.fail(
-        new ExecutionTargetRuntimeError({
-          message: `Remote provider runtime is not implemented yet for target '${target.label}' (${target.kind}).`,
-        }),
-      );
+      return yield* new ExecutionTargetRuntimeError({
+        message: `Remote provider runtime is not implemented yet for target '${target.label}' (${target.kind}).`,
+      });
     });
 
   return {

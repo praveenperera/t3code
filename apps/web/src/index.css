@@ -391,6 +391,109 @@ label:has(> select#reasoning-effort) select {
   background: color-mix(in srgb, var(--muted) 78%, var(--background)) !important;
 }
 
+.chat-markdown .chat-markdown-mermaid-block {
+  margin: 0.65rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: clip;
+  background: color-mix(in srgb, var(--card) 92%, var(--background));
+}
+
+.chat-markdown .chat-markdown-mermaid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 96%, var(--foreground));
+}
+
+.chat-markdown .chat-markdown-mermaid-surface {
+  position: relative;
+  min-height: 5rem;
+  background: color-mix(in srgb, var(--background) 97%, var(--card));
+}
+
+.chat-markdown .chat-markdown-mermaid-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.chat-markdown .chat-markdown-mermaid-status-error {
+  color: var(--destructive-foreground);
+}
+
+.chat-markdown .chat-markdown-mermaid-preview {
+  overflow-x: auto;
+  padding: 1rem;
+}
+
+.chat-markdown .chat-markdown-mermaid-preview svg {
+  display: block;
+  height: auto;
+  min-width: min-content;
+  margin: 0 auto;
+}
+
+.chat-markdown-mermaid-fullscreen-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at top,
+      color-mix(in srgb, var(--card) 94%, transparent),
+      transparent 56%
+    ),
+    color-mix(in srgb, var(--background) 96%, var(--card));
+  touch-action: none;
+}
+
+.chat-markdown-mermaid-fullscreen-stage {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1.5rem;
+}
+
+.chat-markdown-mermaid-fullscreen-preview {
+  cursor: grab;
+  transform-origin: center center;
+  transition: transform 120ms ease;
+  will-change: transform;
+}
+
+.chat-markdown-mermaid-fullscreen-preview svg {
+  display: block;
+  height: auto;
+  max-height: calc(100vh - 9rem);
+  max-width: calc(100vw - 3rem);
+  margin: 0 auto;
+}
+
+.chat-markdown-mermaid-fullscreen-preview:active {
+  cursor: grabbing;
+}
+
+.chat-markdown .chat-markdown-mermaid-code {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.9rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
 .chat-markdown table {
   width: 100%;
   border-collapse: collapse;
