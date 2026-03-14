@@ -17,6 +17,7 @@ import {
   stripDiffSearchParams,
 } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { APP_VIEWPORT_CSS_HEIGHT } from "../lib/viewport";
 import { useStore } from "../store";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
@@ -62,11 +63,11 @@ const DiffLoadingFallback = (props: { mode: DiffPanelMode }) => {
   );
 };
 
-const LazyDiffPanel = (props: { mode: DiffPanelMode }) => {
+const LazyDiffPanel = (props: { mode: DiffPanelMode; onCloseDiff: () => void }) => {
   return (
     <DiffWorkerPoolProvider>
       <Suspense fallback={<DiffLoadingFallback mode={props.mode} />}>
-        <DiffPanel mode={props.mode} />
+        <DiffPanel mode={props.mode} onCloseDiff={props.onCloseDiff} />
       </Suspense>
     </DiffWorkerPoolProvider>
   );
@@ -153,7 +154,7 @@ const DiffPanelInlineSidebar = (props: {
           storageKey: DIFF_INLINE_SIDEBAR_WIDTH_STORAGE_KEY,
         }}
       >
-        {renderDiffContent ? <LazyDiffPanel mode="sidebar" /> : null}
+        {renderDiffContent ? <LazyDiffPanel mode="sidebar" onCloseDiff={onCloseDiff} /> : null}
         <SidebarRail />
       </Sidebar>
     </SidebarProvider>
@@ -182,7 +183,10 @@ function ChatThreadRouteView() {
       to: "/$threadId",
       params: { threadId },
       replace: true,
-      search: (previous) => stripDiffSearchParams(previous),
+      search: (previous) => {
+        const rest = stripDiffSearchParams(previous);
+        return { ...rest, diff: undefined };
+      },
     });
   }, [navigate, threadId]);
   const openDiff = useCallback(() => {
@@ -222,7 +226,10 @@ function ChatThreadRouteView() {
   if (!shouldUseDiffSheet) {
     return (
       <>
-        <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
+        <SidebarInset
+          className="min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground"
+          style={{ height: APP_VIEWPORT_CSS_HEIGHT }}
+        >
           <ChatView key={threadId} threadId={threadId} />
         </SidebarInset>
         <DiffPanelInlineSidebar
@@ -237,11 +244,14 @@ function ChatThreadRouteView() {
 
   return (
     <>
-      <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
+      <SidebarInset
+        className="min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground"
+        style={{ height: APP_VIEWPORT_CSS_HEIGHT }}
+      >
         <ChatView key={threadId} threadId={threadId} />
       </SidebarInset>
       <DiffPanelSheet diffOpen={diffOpen} onCloseDiff={closeDiff}>
-        {shouldRenderDiffContent ? <LazyDiffPanel mode="sheet" /> : null}
+        {shouldRenderDiffContent ? <LazyDiffPanel mode="sheet" onCloseDiff={closeDiff} /> : null}
       </DiffPanelSheet>
     </>
   );

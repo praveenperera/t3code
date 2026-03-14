@@ -1,5 +1,13 @@
 import { FitAddon } from "@xterm/addon-fit";
-import { Plus, SquareSplitHorizontal, TerminalSquare, Trash2, XIcon } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  Plus,
+  SquareSplitHorizontal,
+  TerminalSquare,
+  Trash2,
+  XIcon,
+} from "lucide-react";
 import {
   LOCAL_EXECUTION_TARGET_ID,
   type ExecutionTargetId,
@@ -31,13 +39,20 @@ import {
   type ThreadTerminalGroup,
 } from "../types";
 import { readNativeApi } from "~/nativeApi";
+import { readViewportHeight, subscribeToViewportChanges } from "../lib/viewport";
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
+const TERMINAL_FONT_SIZE_PX = 12;
+const TERMINAL_LINE_HEIGHT = 1.2;
 
 function maxDrawerHeight(): number {
-  if (typeof window === "undefined") return DEFAULT_THREAD_TERMINAL_HEIGHT;
-  return Math.max(MIN_DRAWER_HEIGHT, Math.floor(window.innerHeight * MAX_DRAWER_HEIGHT_RATIO));
+  const viewportHeight = readViewportHeight();
+  if (viewportHeight <= 0) {
+    return DEFAULT_THREAD_TERMINAL_HEIGHT;
+  }
+  const preferredMaxHeight = Math.floor(viewportHeight * MAX_DRAWER_HEIGHT_RATIO);
+  return Math.max(Math.min(MIN_DRAWER_HEIGHT, viewportHeight), preferredMaxHeight);
 }
 
 function clampDrawerHeight(height: number): number {
@@ -182,8 +197,8 @@ function TerminalViewport({
     const fitAddon = new FitAddon();
     const terminal = new Terminal({
       cursorBlink: true,
-      lineHeight: 1.2,
-      fontSize: 12,
+      lineHeight: TERMINAL_LINE_HEIGHT,
+      fontSize: TERMINAL_FONT_SIZE_PX,
       scrollback: 5_000,
       fontFamily: '"SF Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
       theme: terminalThemeFromApp(),
@@ -223,6 +238,58 @@ function TerminalViewport({
       void sendTerminalInput("\u000c", "Failed to clear terminal");
       return false;
     });
+
+    const fallbackLineHeightPx = TERMINAL_FONT_SIZE_PX * TERMINAL_LINE_HEIGHT;
+    const touchState = {
+      active: false,
+      lastClientY: 0,
+      pixelRemainder: 0,
+    };
+    const touchTarget =
+      mount.querySelector<HTMLElement>(".xterm-screen") ??
+      mount.querySelector<HTMLElement>(".xterm-viewport") ??
+      mount;
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        touchState.active = false;
+        touchState.pixelRemainder = 0;
+        return;
+      }
+      touchState.active = true;
+      touchState.lastClientY = event.touches[0]!.clientY;
+      touchState.pixelRemainder = 0;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!touchState.active || event.touches.length !== 1) {
+        return;
+      }
+
+      const nextClientY = event.touches[0]!.clientY;
+      const pixelDelta = touchState.lastClientY - nextClientY;
+      touchState.lastClientY = nextClientY;
+
+      if (Math.abs(pixelDelta) < 0.5) {
+        return;
+      }
+
+      touchState.pixelRemainder += pixelDelta;
+      const lineDelta = Math.trunc(touchState.pixelRemainder / fallbackLineHeightPx);
+      if (lineDelta === 0) {
+        return;
+      }
+
+      touchState.pixelRemainder -= lineDelta * fallbackLineHeightPx;
+      event.preventDefault();
+      terminal.scrollLines(lineDelta);
+    };
+    const resetTouchState = () => {
+      touchState.active = false;
+      touchState.pixelRemainder = 0;
+    };
+    touchTarget.addEventListener("touchstart", onTouchStart, { passive: true });
+    touchTarget.addEventListener("touchmove", onTouchMove, { passive: false });
+    touchTarget.addEventListener("touchend", resetTouchState, { passive: true });
+    touchTarget.addEventListener("touchcancel", resetTouchState, { passive: true });
 
     const terminalLinksDisposable = terminal.registerLinkProvider({
       provideLinks: (bufferLineNumber, callback) => {
@@ -432,6 +499,10 @@ function TerminalViewport({
       inputDisposable.dispose();
       terminalLinksDisposable.dispose();
       themeObserver.disconnect();
+      touchTarget.removeEventListener("touchstart", onTouchStart);
+      touchTarget.removeEventListener("touchmove", onTouchMove);
+      touchTarget.removeEventListener("touchend", resetTouchState);
+      touchTarget.removeEventListener("touchcancel", resetTouchState);
       terminalRef.current = null;
       fitAddonRef.current = null;
       terminal.dispose();
@@ -554,8 +625,10 @@ export default function ThreadTerminalDrawer({
   onCloseTerminal,
   onHeightChange,
 }: ThreadTerminalDrawerProps) {
+  const drawerRef = useRef<HTMLElement>(null);
   const [drawerHeight, setDrawerHeight] = useState(() => clampDrawerHeight(height));
   const [resizeEpoch, setResizeEpoch] = useState(0);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const drawerHeightRef = useRef(drawerHeight);
   const lastSyncedHeightRef = useRef(clampDrawerHeight(height));
   const onHeightChangeRef = useRef(onHeightChange);
@@ -684,6 +757,20 @@ export default function ThreadTerminalDrawer({
   const onNewTerminalAction = useCallback(() => {
     onNewTerminal();
   }, [onNewTerminal]);
+  const fullscreenActionLabel = fullscreenOpen ? "Exit Fullscreen" : "Fullscreen";
+  const onToggleFullscreen = useCallback(() => {
+    const drawer = drawerRef.current;
+    if (!drawer) {
+      return;
+    }
+
+    if (document.fullscreenElement === drawer) {
+      void document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+
+    void drawer.requestFullscreen().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     onHeightChangeRef.current = onHeightChange;
@@ -752,7 +839,7 @@ export default function ThreadTerminalDrawer({
   );
 
   useEffect(() => {
-    const onWindowResize = () => {
+    const onViewportResize = () => {
       const clampedHeight = clampDrawerHeight(drawerHeightRef.current);
       const changed = clampedHeight !== drawerHeightRef.current;
       if (changed) {
@@ -764,10 +851,8 @@ export default function ThreadTerminalDrawer({
       }
       setResizeEpoch((value) => value + 1);
     };
-    window.addEventListener("resize", onWindowResize);
-    return () => {
-      window.removeEventListener("resize", onWindowResize);
-    };
+
+    return subscribeToViewportChanges(onViewportResize);
   }, [syncHeight]);
 
   useEffect(() => {
@@ -776,8 +861,21 @@ export default function ThreadTerminalDrawer({
     };
   }, [syncHeight]);
 
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setFullscreenOpen(document.fullscreenElement === drawerRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    syncFullscreenState();
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+    };
+  }, []);
+
   return (
     <aside
+      ref={drawerRef}
       className="thread-terminal-drawer relative flex min-w-0 shrink-0 flex-col overflow-hidden border-t border-border/80 bg-background"
       style={{ height: `${drawerHeight}px` }}
     >
@@ -810,6 +908,18 @@ export default function ThreadTerminalDrawer({
               label={newTerminalActionLabel}
             >
               <Plus className="size-3.25" />
+            </TerminalActionButton>
+            <div className="h-4 w-px bg-border/80" />
+            <TerminalActionButton
+              className="p-1 text-foreground/90 transition-colors hover:bg-accent"
+              onClick={onToggleFullscreen}
+              label={fullscreenActionLabel}
+            >
+              {fullscreenOpen ? (
+                <Minimize2 className="size-3.25" />
+              ) : (
+                <Maximize2 className="size-3.25" />
+              )}
             </TerminalActionButton>
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
@@ -902,6 +1012,17 @@ export default function ThreadTerminalDrawer({
                     label={newTerminalActionLabel}
                   >
                     <Plus className="size-3.25" />
+                  </TerminalActionButton>
+                  <TerminalActionButton
+                    className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
+                    onClick={onToggleFullscreen}
+                    label={fullscreenActionLabel}
+                  >
+                    {fullscreenOpen ? (
+                      <Minimize2 className="size-3.25" />
+                    ) : (
+                      <Maximize2 className="size-3.25" />
+                    )}
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"

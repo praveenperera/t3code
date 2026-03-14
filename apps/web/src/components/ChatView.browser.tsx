@@ -638,6 +638,7 @@ async function mountChatView(options: {
   viewport: ViewportSpec;
   snapshot: OrchestrationReadModel;
   configureFixture?: (fixture: TestFixture) => void;
+  initialEntries?: string[];
 }): Promise<MountedChatView> {
   fixture = buildFixture(options.snapshot);
   options.configureFixture?.(fixture);
@@ -655,7 +656,7 @@ async function mountChatView(options: {
 
   const router = getRouter(
     createMemoryHistory({
-      initialEntries: [`/${THREAD_ID}`],
+      initialEntries: options.initialEntries ?? [`/${THREAD_ID}`],
     }),
   );
 
@@ -1089,6 +1090,39 @@ describe("ChatView timeline estimator parity (full app)", () => {
         .element(page.getByText("Send a message to start the conversation."))
         .toBeInTheDocument();
       await expect.element(page.getByTestId("composer-editor")).toBeInTheDocument();
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("closes the diff panel from the header close button", async () => {
+    const mounted = await mountChatView({
+      viewport: {
+        ...DEFAULT_VIEWPORT,
+        name: "wide-desktop",
+        width: 1400,
+      },
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-diff-close" as MessageId,
+        targetText: "diff close test",
+      }),
+      initialEntries: [`/${THREAD_ID}?diff=1`],
+    });
+
+    try {
+      const closeButton = await waitForElement(
+        () => document.querySelector<HTMLButtonElement>('button[aria-label="Close diff panel"]'),
+        "Unable to find the diff panel close button.",
+      );
+
+      closeButton.click();
+
+      await vi.waitFor(
+        () => {
+          expect(mounted.router.state.location.search).toEqual({});
+        },
+        { timeout: 8_000, interval: 16 },
+      );
     } finally {
       await mounted.cleanup();
     }

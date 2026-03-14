@@ -19,6 +19,7 @@ import {
 } from "../lib/executionTargetReactQuery";
 import { portForwardListQueryOptions, portForwardQueryKeys } from "../lib/portForwardReactQuery";
 import { ensureNativeApi } from "../nativeApi";
+import { APP_VIEWPORT_CSS_HEIGHT } from "../lib/viewport";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
@@ -386,7 +387,10 @@ function SettingsRouteView() {
   );
 
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
+    <SidebarInset
+      className="min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate"
+      style={{ height: APP_VIEWPORT_CSS_HEIGHT }}
+    >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         {isElectron && (
           <div className="drag-region flex h-[52px] shrink-0 items-center border-b border-border px-5">

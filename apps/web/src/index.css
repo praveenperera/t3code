@@ -63,6 +63,7 @@
 
 :root {
   color-scheme: light;
+  --app-viewport-height: 100dvh;
   --radius: 0.625rem;
   --background: var(--color-white);
   --foreground: var(--color-neutral-800);
@@ -223,6 +224,16 @@ input {
 }
 
 /* Terminal drawer scrollbar parity with chat */
+.thread-terminal-drawer .xterm {
+  height: 100%;
+}
+
+.thread-terminal-drawer .xterm .xterm-viewport {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y !important;
+}
+
 .thread-terminal-drawer .xterm .xterm-scrollable-element > .scrollbar.vertical {
   width: 6px !important;
 }

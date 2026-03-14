@@ -83,6 +83,7 @@ import {
   SidebarMenuSubItem,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
@@ -256,6 +257,7 @@ function SortableProjectItem({
 }
 
 export default function Sidebar() {
+  const { isMobile, setOpenMobile } = useSidebar();
   const projects = useStore((store) => store.projects);
   const threads = useStore((store) => store.threads);
   const markThreadUnread = useStore((store) => store.markThreadUnread);
@@ -444,8 +446,11 @@ export default function Sidebar() {
         to: "/$threadId",
         params: { threadId: latestThread.id },
       });
+      if (isMobile) {
+        setOpenMobile(false);
+      }
     },
-    [navigate, threads],
+    [isMobile, navigate, setOpenMobile, threads],
   );
 
   const addProjectFromPath = useCallback(
@@ -858,13 +863,18 @@ export default function Sidebar() {
         to: "/$threadId",
         params: { threadId },
       });
+      if (isMobile) {
+        setOpenMobile(false);
+      }
     },
     [
       clearSelection,
+      isMobile,
       navigate,
       rangeSelectTo,
       selectedThreadIds.size,
       setSelectionAnchor,
+      setOpenMobile,
       toggleThreadSelection,
     ],
   );
@@ -1628,6 +1638,9 @@ export default function Sidebar() {
                                           to: "/$threadId",
                                           params: { threadId: thread.id },
                                         });
+                                        if (isMobile) {
+                                          setOpenMobile(false);
+                                        }
                                       }}
                                       onContextMenu={(event) => {
                                         event.preventDefault();
@@ -1825,7 +1838,12 @@ export default function Sidebar() {
               <SidebarMenuButton
                 size="sm"
                 className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-                onClick={() => void navigate({ to: "/settings" })}
+                onClick={() => {
+                  void navigate({ to: "/settings" });
+                  if (isMobile) {
+                    setOpenMobile(false);
+                  }
+                }}
               >
                 <SettingsIcon className="size-3.5" />
                 <span className="text-xs">Settings</span>

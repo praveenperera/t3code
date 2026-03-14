@@ -154,11 +154,12 @@ function buildFileDiffRenderKey(fileDiff: FileDiffMetadata): string {
 
 interface DiffPanelProps {
   mode?: DiffPanelMode;
+  onCloseDiff?: () => void;
 }
 
 export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 
-export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
+export default function DiffPanel({ mode = "inline", onCloseDiff }: DiffPanelProps) {
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const { settings } = useAppSettings();
@@ -401,14 +402,21 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   }, [selectedTurn?.turnId, selectedTurnId]);
 
   const closeDiff = useCallback(() => {
+    if (onCloseDiff) {
+      onCloseDiff();
+      return;
+    }
     if (!routeThreadId) return;
     void navigate({
       to: "/$threadId",
       params: { threadId: routeThreadId },
       replace: true,
-      search: (previous) => stripDiffSearchParams(previous),
+      search: (previous) => {
+        const rest = stripDiffSearchParams(previous);
+        return { ...rest, diff: undefined };
+      },
     });
-  }, [navigate, routeThreadId]);
+  }, [navigate, onCloseDiff, routeThreadId]);
   const headerRow = (
     <>
       <div className="relative min-w-0 flex-1 [-webkit-app-region:no-drag]">
