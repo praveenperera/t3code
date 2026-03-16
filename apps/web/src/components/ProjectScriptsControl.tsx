@@ -340,9 +340,15 @@ export default function ProjectScriptsControl({
           </Menu>
         </Group>
       ) : (
-        <Button size="xs" variant="outline" onClick={openAddDialog} title="Add action">
+        <Button
+          className="whitespace-nowrap"
+          size="xs"
+          variant="outline"
+          onClick={openAddDialog}
+          title="Add action"
+        >
           <PlusIcon className="size-3.5" />
-          <span className="sr-only @sm/header-actions:not-sr-only @sm/header-actions:ml-0.5">
+          <span className="sr-only whitespace-nowrap @2xl/header-actions:not-sr-only @2xl/header-actions:ml-0.5">
             Add action
           </span>
         </Button>

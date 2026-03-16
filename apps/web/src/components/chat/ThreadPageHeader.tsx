@@ -60,8 +60,8 @@ export function ThreadPageHeader({
     : [];
 
   return (
-    <div className="relative flex min-w-0 flex-1 items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+    <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden sm:flex-1 sm:gap-3">
         <SidebarTrigger className="size-7 shrink-0" />
         <h2
           className="min-w-0 shrink truncate text-sm font-medium text-foreground"
@@ -83,12 +83,10 @@ export function ThreadPageHeader({
           </Badge>
         )}
       </div>
-      <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 sm:flex">
-        <div className="pointer-events-auto">
-          <ThreadHeaderTabs activeTab={activeTab} mode="inline" threadId={activeThreadId} />
-        </div>
+      <div className="hidden min-w-0 justify-center sm:flex">
+        <ThreadHeaderTabs activeTab={activeTab} mode="inline" threadId={activeThreadId} />
       </div>
-      <div className="@container/header-actions flex min-w-0 items-center justify-end gap-1.5 sm:flex-1 sm:gap-2 @sm/header-actions:gap-3">
+      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2 @sm/header-actions:gap-3">
         {(openInCwd || githubTargetUrl) && (
           <div className="hidden sm:block">
             <OpenInPicker
