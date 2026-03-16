@@ -1,5 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon, PanelLeftCloseIcon } from "lucide-react";
+import type { RefObject } from "react";
 
 import { cn } from "~/lib/utils";
 
@@ -136,8 +137,10 @@ export function DiffFileTree(props: {
   nodes: readonly DiffFileTreeNode[];
   onOpenInEditor: (filePath: string) => void;
   onSelectFile: (filePath: string) => void;
+  onScrollViewport?: (scrollTop: number) => void;
   onToggleDirectory: (directoryPath: string) => void;
   onToggleVisibility?: () => void;
+  scrollViewportRef?: RefObject<HTMLDivElement | null>;
   showVisibilityToggle?: boolean;
 }) {
   return (
@@ -159,7 +162,13 @@ export function DiffFileTree(props: {
           </Button>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+      <div
+        ref={props.scrollViewportRef}
+        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        onScroll={(event) => {
+          props.onScrollViewport?.(event.currentTarget.scrollTop);
+        }}
+      >
         <div className="space-y-0.5">
           {props.nodes.map((node) => (
             <DiffFileTreeNodeRow

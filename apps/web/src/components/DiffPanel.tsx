@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { LOCAL_EXECUTION_TARGET_ID, ThreadId, type TurnId } from "@t3tools/contracts";
 import { PanelLeftIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { openInPreferredEditor } from "../editorPreferences";
 import { gitBranchesQueryOptions, gitWorkingTreeDiffQueryOptions } from "~/lib/gitReactQuery";
 import { checkpointDiffQueryOptions } from "~/lib/providerReactQuery";
@@ -23,6 +23,10 @@ import {
   DiffFileTree,
 } from "./diff/DiffFileTree";
 import { DiffPanelHeader, type DiffRenderMode } from "./diff/DiffPanelHeader";
+import {
+  readDiffFileTreeScrollTop,
+  writeDiffFileTreeScrollTop,
+} from "./diff/diffFileTreeScrollState";
 import {
   buildFileDiffRenderKey,
   DIFF_PANEL_UNSAFE_CSS,
@@ -55,6 +59,7 @@ export default function DiffPanel({
   );
   const [expandedDirectories, setExpandedDirectories] = useState<Record<string, boolean>>({});
   const [isMobileFileTreeOpen, setIsMobileFileTreeOpen] = useState(true);
+  const fileTreeViewportRef = useRef<HTMLDivElement>(null);
   const patchViewportRef = useRef<HTMLDivElement>(null);
   const routeThreadId = useParams({
     strict: false,
@@ -242,6 +247,16 @@ export default function DiffPanel({
     renderablePatch?.kind === "files" &&
     activeFilePath !== null &&
     (!shouldCollapseFileTreeOnMobile || isMobileFileTreeOpen);
+  const diffFileTreeScrollStateKey = useMemo(() => {
+    if (variant !== "full" || !routeThreadId) {
+      return null;
+    }
+    return [
+      routeThreadId,
+      isUncommittedSelection ? "uncommitted" : "checkpoint",
+      selectedTurnId ?? "all",
+    ].join(":");
+  }, [isUncommittedSelection, routeThreadId, selectedTurnId, variant]);
 
   useEffect(() => {
     if (!shouldCollapseFileTreeOnMobile) {
@@ -276,6 +291,21 @@ export default function DiffPanel({
       return changed ? merged : current;
     });
   }, [fileTreeNodes, variant]);
+
+  useLayoutEffect(() => {
+    if (variant !== "full" || !showFileTree || !diffFileTreeScrollStateKey) {
+      return;
+    }
+    const viewport = fileTreeViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+    const savedScrollTop = readDiffFileTreeScrollTop(diffFileTreeScrollStateKey);
+    if (viewport.scrollTop === savedScrollTop) {
+      return;
+    }
+    viewport.scrollTop = savedScrollTop;
+  }, [activeFilePath, diffFileTreeScrollStateKey, fileTreeNodes, showFileTree, variant]);
 
   useEffect(() => {
     if (variant !== "full") {
@@ -354,6 +384,12 @@ export default function DiffPanel({
   const selectFile = useCallback(
     (filePath: string) => {
       if (!activeThread) return;
+      if (diffFileTreeScrollStateKey && fileTreeViewportRef.current) {
+        writeDiffFileTreeScrollTop(
+          diffFileTreeScrollStateKey,
+          fileTreeViewportRef.current.scrollTop,
+        );
+      }
       if (shouldCollapseFileTreeOnMobile) {
         setIsMobileFileTreeOpen(false);
       }
@@ -370,7 +406,9 @@ export default function DiffPanel({
     [
       activeThread,
       buildDiffSearch,
+      diffFileTreeScrollStateKey,
       diffRouteTo,
+      fileTreeViewportRef,
       isUncommittedSelection,
       navigate,
       selectedTurnId,
@@ -455,8 +493,15 @@ export default function DiffPanel({
               expandedDirectories={expandedDirectories}
               nodes={fileTreeNodes}
               onOpenInEditor={openDiffFileInEditor}
+              onScrollViewport={(scrollTop) => {
+                if (!diffFileTreeScrollStateKey) {
+                  return;
+                }
+                writeDiffFileTreeScrollTop(diffFileTreeScrollStateKey, scrollTop);
+              }}
               onSelectFile={selectFile}
               onToggleDirectory={toggleDirectory}
+              scrollViewportRef={fileTreeViewportRef}
               {...(shouldCollapseFileTreeOnMobile
                 ? {
                     onToggleVisibility: () => setIsMobileFileTreeOpen(false),
