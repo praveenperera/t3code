@@ -31,6 +31,7 @@ interface ChatHeaderProps {
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<void>;
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
   onDeleteProjectScript: (scriptId: string) => Promise<void>;
+  onReorderProjectScripts: (nextScripts: ProjectScript[]) => Promise<void>;
   onToggleTerminal: () => void;
   onToggleDiff: () => void;
 }
@@ -54,6 +55,7 @@ export const ChatHeader = memo(function ChatHeader({
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onReorderProjectScripts,
   onToggleTerminal,
   onToggleDiff,
 }: ChatHeaderProps) {
@@ -78,6 +80,7 @@ export const ChatHeader = memo(function ChatHeader({
             onAddScript={onAddProjectScript}
             onUpdateScript={onUpdateProjectScript}
             onDeleteScript={onDeleteProjectScript}
+            onReorderScripts={onReorderProjectScripts}
           />
         </div>
       )}

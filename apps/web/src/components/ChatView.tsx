@@ -1283,7 +1283,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       previousScripts: ProjectScript[];
       nextScripts: ProjectScript[];
       keybinding?: string | null;
-      keybindingCommand: KeybindingCommand;
+      keybindingCommand?: KeybindingCommand;
     }) => {
       const api = readNativeApi();
       if (!api) return;
@@ -1295,10 +1295,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
         scripts: input.nextScripts,
       });
 
-      const keybindingRule = decodeProjectScriptKeybindingRule({
-        keybinding: input.keybinding,
-        command: input.keybindingCommand,
-      });
+      const keybindingRule =
+        input.keybindingCommand !== undefined
+          ? decodeProjectScriptKeybindingRule({
+              keybinding: input.keybinding,
+              command: input.keybindingCommand,
+            })
+          : null;
 
       if (isElectron && keybindingRule) {
         await api.server.upsertKeybinding(keybindingRule);
@@ -1401,6 +1404,28 @@ export default function ChatView({ threadId }: ChatViewProps) {
           title: "Could not delete action",
           description: error instanceof Error ? error.message : "An unexpected error occurred.",
         });
+      }
+    },
+    [activeProject, persistProjectScripts],
+  );
+  const reorderProjectScripts = useCallback(
+    async (nextScripts: ProjectScript[]) => {
+      if (!activeProject) return;
+
+      try {
+        await persistProjectScripts({
+          projectId: activeProject.id,
+          projectCwd: activeProject.cwd,
+          previousScripts: activeProject.scripts,
+          nextScripts,
+        });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not reorder actions",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+        throw error;
       }
     },
     [activeProject, persistProjectScripts],
@@ -3291,6 +3316,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
           onAddProjectScript={saveProjectScript}
           onUpdateProjectScript={updateProjectScript}
           onDeleteProjectScript={deleteProjectScript}
+          onReorderProjectScripts={reorderProjectScripts}
           onToggleTerminal={toggleTerminalVisibility}
           onToggleDiff={onToggleDiff}
         />

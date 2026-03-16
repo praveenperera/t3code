@@ -4,9 +4,26 @@ import type {
   ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  type DragEndEvent,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { CSS } from "@dnd-kit/utilities";
+import {
   BugIcon,
   ChevronDownIcon,
   FlaskConicalIcon,
+  GripVerticalIcon,
   HammerIcon,
   ListChecksIcon,
   PlayIcon,
@@ -14,7 +31,14 @@ import {
   SettingsIcon,
   WrenchIcon,
 } from "lucide-react";
-import React, { type FormEvent, type KeyboardEvent, useCallback, useMemo, useState } from "react";
+import React, {
+  type FormEvent,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   keybindingValueForCommand,
@@ -94,6 +118,37 @@ interface ProjectScriptsControlProps {
   onAddScript: (input: NewProjectScriptInput) => Promise<void> | void;
   onUpdateScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void> | void;
   onDeleteScript: (scriptId: string) => Promise<void> | void;
+  onReorderScripts: (nextScripts: ProjectScript[]) => Promise<void> | void;
+}
+
+type SortableScriptHandleProps = Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">;
+
+function SortableProjectScriptItem({
+  scriptId,
+  children,
+}: {
+  scriptId: string;
+  children: (input: {
+    handleProps: SortableScriptHandleProps;
+    isDragging: boolean;
+    isOver: boolean;
+    setNodeRef: ReturnType<typeof useSortable>["setNodeRef"];
+    style: React.CSSProperties;
+  }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } =
+    useSortable({ id: scriptId });
+
+  return children({
+    handleProps: { attributes, listeners },
+    isDragging,
+    isOver,
+    setNodeRef,
+    style: {
+      transform: CSS.Translate.toString(transform),
+      transition,
+    },
+  });
 }
 
 function normalizeShortcutKeyToken(key: string): string | null {
@@ -155,6 +210,7 @@ export default function ProjectScriptsControl({
   onAddScript,
   onUpdateScript,
   onDeleteScript,
+  onReorderScripts,
 }: ProjectScriptsControlProps) {
   const addScriptFormId = React.useId();
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
@@ -167,14 +223,24 @@ export default function ProjectScriptsControl({
   const [keybinding, setKeybinding] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [orderedScripts, setOrderedScripts] = useState(scripts);
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+  );
+
+  useEffect(() => {
+    setOrderedScripts(scripts);
+  }, [scripts]);
 
   const primaryScript = useMemo(() => {
     if (preferredScriptId) {
-      const preferred = scripts.find((script) => script.id === preferredScriptId);
+      const preferred = orderedScripts.find((script) => script.id === preferredScriptId);
       if (preferred) return preferred;
     }
-    return primaryProjectScript(scripts);
-  }, [preferredScriptId, scripts]);
+    return primaryProjectScript(orderedScripts);
+  }, [orderedScripts, preferredScriptId]);
   const isEditing = editingScriptId !== null;
   const dropdownItemClassName =
     "data-highlighted:bg-transparent data-highlighted:text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground data-highlighted:hover:bg-accent data-highlighted:hover:text-accent-foreground data-highlighted:focus-visible:bg-accent data-highlighted:focus-visible:text-accent-foreground";
@@ -266,6 +332,26 @@ export default function ProjectScriptsControl({
     void onDeleteScript(editingScriptId);
   }, [editingScriptId, onDeleteScript]);
 
+  const handleDragEnd = useCallback(
+    async ({ active, over }: DragEndEvent) => {
+      if (!over || active.id === over.id) return;
+
+      const previousScripts = orderedScripts;
+      const oldIndex = previousScripts.findIndex((script) => script.id === active.id);
+      const newIndex = previousScripts.findIndex((script) => script.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const nextScripts = arrayMove(previousScripts, oldIndex, newIndex);
+      setOrderedScripts(nextScripts);
+      try {
+        await onReorderScripts(nextScripts);
+      } catch {
+        setOrderedScripts(previousScripts);
+      }
+    },
+    [onReorderScripts, orderedScripts],
+  );
+
   return (
     <>
       {primaryScript ? (
@@ -289,49 +375,83 @@ export default function ProjectScriptsControl({
               <ChevronDownIcon className="size-4" />
             </MenuTrigger>
             <MenuPopup align="end">
-              {scripts.map((script) => {
-                const shortcutLabel = shortcutLabelForCommand(
-                  keybindings,
-                  commandForProjectScript(script.id),
-                );
-                return (
-                  <MenuItem
-                    key={script.id}
-                    className={`group ${dropdownItemClassName}`}
-                    onClick={() => onRunScript(script)}
-                  >
-                    <ScriptIcon icon={script.icon} className="size-4" />
-                    <span className="truncate">
-                      {script.runOnWorktreeCreate ? `${script.name} (setup)` : script.name}
-                    </span>
-                    <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end">
-                      {shortcutLabel && (
-                        <MenuShortcut className="ms-0 transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
-                          {shortcutLabel}
-                        </MenuShortcut>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="absolute right-0 top-1/2 size-6 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:pointer-events-auto"
-                        aria-label={`Edit ${script.name}`}
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          openEditDialog(script);
-                        }}
-                      >
-                        <SettingsIcon className="size-3.5" />
-                      </Button>
-                    </span>
-                  </MenuItem>
-                );
-              })}
+              <DndContext
+                sensors={dragSensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis]}
+                onDragEnd={(event) => {
+                  void handleDragEnd(event);
+                }}
+              >
+                <SortableContext
+                  items={orderedScripts.map((script) => script.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {orderedScripts.map((script) => {
+                    const shortcutLabel = shortcutLabelForCommand(
+                      keybindings,
+                      commandForProjectScript(script.id),
+                    );
+                    return (
+                      <SortableProjectScriptItem key={script.id} scriptId={script.id}>
+                        {({ handleProps, isDragging, isOver, setNodeRef, style }) => (
+                          <MenuItem
+                            ref={setNodeRef}
+                            style={style}
+                            className={`group ${dropdownItemClassName} ${
+                              isDragging ? "z-20 opacity-80" : ""
+                            } ${isOver && !isDragging ? "ring-1 ring-primary/40" : ""}`}
+                            onClick={() => onRunScript(script)}
+                          >
+                            <button
+                              type="button"
+                              aria-label={`Reorder ${script.name}`}
+                              className="flex size-5 shrink-0 cursor-grab items-center justify-center rounded-sm text-muted-foreground/60 outline-none touch-none hover:bg-accent/70 hover:text-foreground active:cursor-grabbing focus-visible:ring-1 focus-visible:ring-ring"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                              {...handleProps.attributes}
+                              {...handleProps.listeners}
+                            >
+                              <GripVerticalIcon className="size-3.5" />
+                            </button>
+                            <ScriptIcon icon={script.icon} className="size-4" />
+                            <span className="truncate">
+                              {script.runOnWorktreeCreate ? `${script.name} (setup)` : script.name}
+                            </span>
+                            <span className="relative ms-auto flex h-6 min-w-6 items-center justify-end">
+                              {shortcutLabel && (
+                                <MenuShortcut className="ms-0 transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
+                                  {shortcutLabel}
+                                </MenuShortcut>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                className="absolute right-0 top-1/2 size-6 -translate-y-1/2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-visible:opacity-100 group-focus-visible:pointer-events-auto"
+                                aria-label={`Edit ${script.name}`}
+                                onPointerDown={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  openEditDialog(script);
+                                }}
+                              >
+                                <SettingsIcon className="size-3.5" />
+                              </Button>
+                            </span>
+                          </MenuItem>
+                        )}
+                      </SortableProjectScriptItem>
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
               <MenuItem className={dropdownItemClassName} onClick={openAddDialog}>
                 <PlusIcon className="size-4" />
                 Add action
