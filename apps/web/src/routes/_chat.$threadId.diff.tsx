@@ -67,6 +67,7 @@ function FullDiffRouteView() {
                 replace: true,
                 search: {
                   diff: "1",
+                  ...(search.diffScope ? { diffScope: search.diffScope } : {}),
                   ...(search.diffTurnId ? { diffTurnId: search.diffTurnId } : {}),
                   ...(search.diffFilePath ? { diffFilePath: search.diffFilePath } : {}),
                 },
@@ -82,7 +83,7 @@ function FullDiffRouteView() {
 export const Route = createFileRoute("/_chat/$threadId/diff")({
   validateSearch: (search) => parseDiffRouteSearch(search),
   search: {
-    middlewares: [retainSearchParams<DiffRouteSearch>(["diffTurnId", "diffFilePath"])],
+    middlewares: [retainSearchParams<DiffRouteSearch>(["diffScope", "diffTurnId", "diffFilePath"])],
   },
   component: FullDiffRouteView,
 });

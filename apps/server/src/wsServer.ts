@@ -1230,6 +1230,16 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* targetGitManager.status(body);
       }
 
+      case WS_METHODS.gitWorkingTreeDiff: {
+        const body = stripRequestTag(request.body);
+        const target = yield* resolveExecutionTarget(body.targetId);
+        if (target.connection.kind === "local") {
+          return yield* git.readWorkingTreeDiff(body.cwd);
+        }
+        const targetGitCore = yield* getTargetGitCore(target);
+        return yield* targetGitCore.readWorkingTreeDiff(body.cwd);
+      }
+
       case WS_METHODS.gitPull: {
         const body = stripRequestTag(request.body);
         const target = yield* resolveExecutionTarget(body.targetId);

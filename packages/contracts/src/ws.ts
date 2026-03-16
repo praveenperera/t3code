@@ -23,6 +23,7 @@ import {
   GitRemoveWorktreeInput,
   GitRunStackedActionInput,
   GitStatusInput,
+  GitWorkingTreeDiffInput,
 } from "./git";
 import {
   TerminalClearInput,
@@ -70,6 +71,7 @@ export const WS_METHODS = {
   // Git methods
   gitPull: "git.pull",
   gitStatus: "git.status",
+  gitWorkingTreeDiff: "git.workingTreeDiff",
   gitRunStackedAction: "git.runStackedAction",
   gitListBranches: "git.listBranches",
   gitCreateWorktree: "git.createWorktree",
@@ -143,6 +145,7 @@ const WebSocketRequestBody = Schema.Union([
   // Git methods
   tagRequestBody(WS_METHODS.gitPull, GitPullInput),
   tagRequestBody(WS_METHODS.gitStatus, GitStatusInput),
+  tagRequestBody(WS_METHODS.gitWorkingTreeDiff, GitWorkingTreeDiffInput),
   tagRequestBody(WS_METHODS.gitRunStackedAction, GitRunStackedActionInput),
   tagRequestBody(WS_METHODS.gitListBranches, GitListBranchesInput),
   tagRequestBody(WS_METHODS.gitCreateWorktree, GitCreateWorktreeInput),

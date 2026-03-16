@@ -20,6 +20,7 @@ import type {
   GitRemoveWorktreeInput,
   GitStatusInput,
   GitStatusResult,
+  GitWorkingTreeDiffResult,
 } from "@t3tools/contracts";
 
 import type { GitCommandError } from "../Errors.ts";
@@ -95,6 +96,13 @@ export interface GitCoreShape {
    * Read detailed working tree / branch status for a repository.
    */
   readonly statusDetails: (cwd: string) => Effect.Effect<GitStatusDetails, GitCommandError>;
+
+  /**
+   * Read the current staged + unstaged working tree patch for a repository.
+   */
+  readonly readWorkingTreeDiff: (
+    cwd: string,
+  ) => Effect.Effect<GitWorkingTreeDiffResult, GitCommandError>;
 
   /**
    * Build staged change context for commit generation.

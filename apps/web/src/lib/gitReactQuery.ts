@@ -11,6 +11,8 @@ export const gitQueryKeys = {
   all: ["git"] as const,
   status: (cwd: string | null, targetId: ExecutionTargetId | null) =>
     ["git", "status", cwd, targetId] as const,
+  workingTreeDiff: (cwd: string | null, targetId: ExecutionTargetId | null) =>
+    ["git", "working-tree-diff", cwd, targetId] as const,
   branches: (cwd: string | null, targetId: ExecutionTargetId | null) =>
     ["git", "branches", cwd, targetId] as const,
 };
@@ -47,6 +49,29 @@ export function gitStatusQueryOptions(input: {
       });
     },
     enabled: input.cwd !== null,
+    staleTime: GIT_STATUS_STALE_TIME_MS,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+    refetchInterval: GIT_STATUS_REFETCH_INTERVAL_MS,
+  });
+}
+
+export function gitWorkingTreeDiffQueryOptions(input: {
+  cwd: string | null;
+  targetId?: ExecutionTargetId | null;
+  enabled?: boolean;
+}) {
+  return queryOptions({
+    queryKey: gitQueryKeys.workingTreeDiff(input.cwd, input.targetId ?? null),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!input.cwd) throw new Error("Git working tree diff is unavailable.");
+      return api.git.workingTreeDiff({
+        cwd: input.cwd,
+        ...(input.targetId ? { targetId: input.targetId } : {}),
+      });
+    },
+    enabled: (input.enabled ?? true) && input.cwd !== null,
     staleTime: GIT_STATUS_STALE_TIME_MS,
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",

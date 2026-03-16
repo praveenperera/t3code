@@ -97,6 +97,7 @@ const makeIsolatedGitCore = (gitService: GitServiceShape) =>
     return {
       status: (input) => core.status(input),
       statusDetails: (cwd) => core.statusDetails(cwd),
+      readWorkingTreeDiff: (cwd) => core.readWorkingTreeDiff(cwd),
       prepareCommitContext: (cwd, filePaths?) => core.prepareCommitContext(cwd, filePaths),
       commit: (cwd, subject, body) => core.commit(cwd, subject, body),
       pushCurrentBranch: (cwd, fallbackBranch) => core.pushCurrentBranch(cwd, fallbackBranch),
@@ -1731,6 +1732,21 @@ it.layer(TestLayer)("git integration", (it) => {
         const statusAfter = yield* git(tmp, ["status", "--porcelain"]);
         expect(statusAfter).toContain("b.txt");
         expect(statusAfter).not.toContain("a.txt");
+      }),
+    );
+
+    it.effect("readWorkingTreeDiff includes untracked files", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir();
+        yield* initRepoWithCommit(tmp);
+        const core = yield* GitCore;
+
+        yield* writeTextFile(path.join(tmp, "new-file.txt"), "brand new\n");
+
+        const diff = yield* core.readWorkingTreeDiff(tmp);
+        expect(diff.diff).toContain("diff --git a/new-file.txt b/new-file.txt");
+        expect(diff.diff).toContain("new file mode");
+        expect(diff.diff).toContain("+brand new");
       }),
     );
 

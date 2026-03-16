@@ -17,6 +17,8 @@ import type {
   GitRunStackedActionResult,
   GitStatusInput,
   GitStatusResult,
+  GitWorkingTreeDiffInput,
+  GitWorkingTreeDiffResult,
 } from "./git";
 import type {
   ProjectListDirectoryInput,
@@ -170,6 +172,7 @@ export interface NativeApi {
     // Stacked action API
     pull: (input: GitPullInput) => Promise<GitPullResult>;
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
+    workingTreeDiff: (input: GitWorkingTreeDiffInput) => Promise<GitWorkingTreeDiffResult>;
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
   };
   contextMenu: {

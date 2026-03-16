@@ -77,6 +77,13 @@ function parsePorcelainPath(line: string): string | null {
   return filePath.length > 0 ? filePath : null;
 }
 
+function parseNullSeparatedPaths(stdout: string): string[] {
+  return stdout
+    .split("\0")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 function parseBranchLine(line: string): { name: string; current: boolean } | null {
   const trimmed = line.trim();
   if (trimmed.length === 0) return null;
@@ -766,6 +773,58 @@ export const makeGitCore = Effect.gen(function* () {
       })),
     );
 
+  const readWorkingTreeDiff: GitCoreShape["readWorkingTreeDiff"] = (cwd) =>
+    Effect.gen(function* () {
+      const [stagedPatch, unstagedPatch, untrackedPathsStdout] = yield* Effect.all(
+        [
+          runGitStdout("GitCore.readWorkingTreeDiff.staged", cwd, [
+            "diff",
+            "--no-ext-diff",
+            "--cached",
+            "--",
+          ]),
+          runGitStdout("GitCore.readWorkingTreeDiff.unstaged", cwd, [
+            "diff",
+            "--no-ext-diff",
+            "--",
+          ]),
+          runGitStdout("GitCore.readWorkingTreeDiff.untrackedPaths", cwd, [
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "-z",
+          ]),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const untrackedPaths = parseNullSeparatedPaths(untrackedPathsStdout);
+      const untrackedPatches = yield* Effect.all(
+        untrackedPaths.map((filePath) =>
+          runGitStdout(
+            "GitCore.readWorkingTreeDiff.untrackedPatch",
+            cwd,
+            [
+              "diff",
+              "--no-index",
+              "--no-ext-diff",
+              "--src-prefix=a/",
+              "--dst-prefix=b/",
+              "/dev/null",
+              filePath,
+            ],
+            true,
+          ).pipe(Effect.map((patch) => patch.trimEnd())),
+        ),
+        { concurrency: 8 },
+      );
+
+      return {
+        diff: [stagedPatch.trimEnd(), unstagedPatch.trimEnd(), ...untrackedPatches]
+          .filter((patch) => patch.length > 0)
+          .join("\n\n"),
+      };
+    });
+
   const prepareCommitContext: GitCoreShape["prepareCommitContext"] = (cwd, filePaths) =>
     Effect.gen(function* () {
       if (filePaths && filePaths.length > 0) {
@@ -1404,6 +1463,7 @@ export const makeGitCore = Effect.gen(function* () {
   return {
     status,
     statusDetails,
+    readWorkingTreeDiff,
     prepareCommitContext,
     commit,
     pushCurrentBranch,

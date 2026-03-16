@@ -6,12 +6,14 @@ describe("parseDiffRouteSearch", () => {
   it("parses valid diff search values", () => {
     const parsed = parseDiffRouteSearch({
       diff: "1",
+      diffScope: "uncommitted",
       diffTurnId: "turn-1",
       diffFilePath: "src/app.ts",
     });
 
     expect(parsed).toEqual({
       diff: "1",
+      diffScope: "uncommitted",
       diffTurnId: "turn-1",
       diffFilePath: "src/app.ts",
     });
@@ -67,12 +69,25 @@ describe("parseDiffRouteSearch", () => {
   it("normalizes whitespace-only values", () => {
     const parsed = parseDiffRouteSearch({
       diff: "1",
+      diffScope: "  ",
       diffTurnId: "  ",
       diffFilePath: "  ",
     });
 
     expect(parsed).toEqual({
       diff: "1",
+    });
+  });
+
+  it("preserves the uncommitted diff scope without a selected turn", () => {
+    const parsed = parseDiffRouteSearch({
+      diffScope: "uncommitted",
+      diffFilePath: "src/app.ts",
+    });
+
+    expect(parsed).toEqual({
+      diffScope: "uncommitted",
+      diffFilePath: "src/app.ts",
     });
   });
 });
