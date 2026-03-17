@@ -59,6 +59,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useTheme } from "../../hooks/useTheme";
 import { readUiScaleFromDocument, rootFontSizePxForUiScale } from "../../lib/uiScale";
+import { MobileCheckListTapPlugin } from "./MobileCheckListTapPlugin";
 import { resolveThreadNotesInitialEditorState } from "./threadNotesEditorState";
 import { cn } from "~/lib/utils";
 
@@ -1228,7 +1229,7 @@ export function ThreadNotesEditor(props: {
                       className={cn(
                         "min-h-[calc(100dvh-16rem)] rounded-none border-0 bg-transparent outline-none",
                         "leading-[1.75] text-foreground",
-                        "touch-pan-y",
+                        "touch-auto",
                         "[&_ol]:ml-6 [&_ol]:list-decimal [&_ul]:ml-6 [&_ul]:list-disc",
                       )}
                       style={{
@@ -1257,7 +1258,8 @@ export function ThreadNotesEditor(props: {
         </div>
         <HistoryPlugin />
         <ListPlugin />
-        <CheckListPlugin />
+        <CheckListPlugin disableTakeFocusOnClick={isTouchViewport} />
+        <MobileCheckListTapPlugin enabled={isTouchViewport} />
         <CodeHighlightingPlugin />
         {isTouchViewport ? (
           <MobileSelectionToolbar
