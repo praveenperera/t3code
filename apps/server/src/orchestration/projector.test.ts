@@ -76,6 +76,7 @@ describe("orchestration projector", () => {
         model: "gpt-5-codex",
         runtimeMode: "full-access",
         interactionMode: "default",
+        targetId: "local",
         branch: null,
         worktreePath: null,
         latestTurn: null,

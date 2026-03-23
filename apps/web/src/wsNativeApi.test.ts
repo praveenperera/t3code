@@ -92,6 +92,44 @@ function getWindowForTest(): Window & typeof globalThis & { desktopBridge?: unkn
   return testGlobal.window;
 }
 
+function getDocumentForTest(): Document & {
+  documentElement: {
+    dataset: Record<string, string | undefined>;
+  };
+} {
+  const testGlobal = globalThis as typeof globalThis & {
+    document?: Document & {
+      documentElement?: {
+        dataset?: Record<string, string | undefined>;
+      };
+    };
+  };
+  if (!testGlobal.document) {
+    testGlobal.document = {
+      documentElement: {
+        dataset: {},
+      },
+    } as Document & {
+      documentElement: {
+        dataset: Record<string, string | undefined>;
+      };
+    };
+  }
+  if (!testGlobal.document.documentElement) {
+    testGlobal.document.documentElement = {
+      dataset: {},
+    } as HTMLElement;
+  }
+  if (!testGlobal.document.documentElement.dataset) {
+    testGlobal.document.documentElement.dataset = {};
+  }
+  return testGlobal.document as Document & {
+    documentElement: {
+      dataset: Record<string, string | undefined>;
+    };
+  };
+}
+
 const defaultProviders: ReadonlyArray<ServerProviderStatus> = [
   {
     provider: "codex",
@@ -111,7 +149,7 @@ beforeEach(() => {
   latestPushByChannel.clear();
   nextPushSequence = 1;
   Reflect.deleteProperty(getWindowForTest(), "desktopBridge");
-  delete document.documentElement.dataset.uiScale;
+  delete getDocumentForTest().documentElement.dataset.uiScale;
 });
 
 afterEach(() => {
@@ -428,7 +466,7 @@ describe("wsNativeApi", () => {
         showContextMenu,
       },
     });
-    document.documentElement.dataset.uiScale = "large";
+    getDocumentForTest().documentElement.dataset.uiScale = "large";
 
     const { createWsNativeApi } = await import("./wsNativeApi");
     const api = createWsNativeApi();

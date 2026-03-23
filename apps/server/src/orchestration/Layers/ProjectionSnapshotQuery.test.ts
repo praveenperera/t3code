@@ -234,6 +234,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           id: asProjectId("project-1"),
           title: "Project 1",
           workspaceRoot: "/tmp/project-1",
+          targetId: "local",
           defaultModel: "gpt-5-codex",
           scripts: [
             {
@@ -257,6 +258,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           model: "gpt-5-codex",
           interactionMode: "default",
           runtimeMode: "full-access",
+          targetId: "local",
           branch: null,
           worktreePath: null,
           latestTurn: {
@@ -320,6 +322,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           ],
           session: {
             threadId: ThreadId.makeUnsafe("thread-1"),
+            targetId: "local",
             status: "running",
             providerName: "codex",
             runtimeMode: "approval-required",

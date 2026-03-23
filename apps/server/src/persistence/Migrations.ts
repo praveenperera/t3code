@@ -25,12 +25,12 @@ import Migration0010 from "./Migrations/010_ProjectionThreadsRuntimeMode.ts";
 import Migration0011 from "./Migrations/011_OrchestrationThreadCreatedRuntimeMode.ts";
 import Migration0012 from "./Migrations/012_ProjectionThreadsInteractionMode.ts";
 import Migration0013 from "./Migrations/013_ProjectionThreadProposedPlans.ts";
-import Migration0014 from "./Migrations/014_RemoteTargetColumns.ts";
-import Migration0015 from "./Migrations/015_ExecutionTargets.ts";
-import Migration0016 from "./Migrations/016_ProjectTargetColumns.ts";
-import Migration0017 from "./Migrations/017_ThreadNotes.ts";
-import Migration0018 from "./Migrations/018_ProjectionThreadProposedPlanImplementation.ts";
-import Migration0019 from "./Migrations/019_ProjectionTurnsSourceProposedPlan.ts";
+import Migration0014 from "./Migrations/018_ProjectionThreadProposedPlanImplementation.ts";
+import Migration0015 from "./Migrations/019_ProjectionTurnsSourceProposedPlan.ts";
+import Migration0016 from "./Migrations/014_RemoteTargetColumns.ts";
+import Migration0017 from "./Migrations/015_ExecutionTargets.ts";
+import Migration0018 from "./Migrations/016_ProjectTargetColumns.ts";
+import Migration0019 from "./Migrations/017_ThreadNotes.ts";
 import { Effect } from "effect";
 
 /**
@@ -57,12 +57,12 @@ const loader = Migrator.fromRecord({
   "11_OrchestrationThreadCreatedRuntimeMode": Migration0011,
   "12_ProjectionThreadsInteractionMode": Migration0012,
   "13_ProjectionThreadProposedPlans": Migration0013,
-  "14_RemoteTargetColumns": Migration0014,
-  "15_ExecutionTargets": Migration0015,
-  "16_ProjectTargetColumns": Migration0016,
-  "17_ThreadNotes": Migration0017,
-  "18_ProjectionThreadProposedPlanImplementation": Migration0018,
-  "19_ProjectionTurnsSourceProposedPlan": Migration0019,
+  "14_ProjectionThreadProposedPlanImplementation": Migration0014,
+  "15_ProjectionTurnsSourceProposedPlan": Migration0015,
+  "16_RemoteTargetColumns": Migration0016,
+  "17_ExecutionTargets": Migration0017,
+  "18_ProjectTargetColumns": Migration0018,
+  "19_ThreadNotes": Migration0019,
 });
 
 /**

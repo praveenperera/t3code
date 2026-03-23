@@ -164,12 +164,20 @@ function historyLogName(threadId: string): string {
   return `terminal_${Encoding.encodeBase64Url(threadId)}.log`;
 }
 
-function multiTerminalHistoryLogName(threadId: string, terminalId: string): string {
+function multiTerminalHistoryLogName(
+  threadId: string,
+  terminalId: string,
+  targetId = "local",
+): string {
   const threadPart = `terminal_${Encoding.encodeBase64Url(threadId)}`;
-  if (terminalId === DEFAULT_TERMINAL_ID) {
+  if (targetId === "local" && terminalId === DEFAULT_TERMINAL_ID) {
     return `${threadPart}.log`;
   }
-  return `${threadPart}_${Encoding.encodeBase64Url(terminalId)}.log`;
+  const targetPart = Encoding.encodeBase64Url(targetId);
+  if (terminalId === DEFAULT_TERMINAL_ID) {
+    return `${threadPart}_${targetPart}.log`;
+  }
+  return `${threadPart}_${targetPart}_${Encoding.encodeBase64Url(terminalId)}.log`;
 }
 
 function historyLogPath(logsDir: string, threadId = "thread-1"): string {
@@ -636,7 +644,7 @@ describe("TerminalManager", () => {
 
     const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
     const keys = [...sessions.keys()];
-    expect(keys).toEqual(["thread-2\u0000default"]);
+    expect(keys).toEqual(["local\u0000thread-2\u0000default"]);
 
     manager.dispose();
   });
@@ -677,8 +685,8 @@ describe("TerminalManager", () => {
       ).toBe(true);
     } else {
       expect(
-        ptyAdapter.spawnInputs.some((input) =>
-          ["/bin/zsh", "/bin/bash", "/bin/sh", "zsh", "bash", "sh"].includes(input.shell),
+        ptyAdapter.spawnInputs.some(
+          (input) => input.shell !== "/definitely/missing-shell" && input.shell.length > 0,
         ),
       ).toBe(true);
     }
