@@ -1,6 +1,7 @@
 import { LOCAL_EXECUTION_TARGET_ID } from "@t3tools/contracts";
 import { Effect, Layer } from "effect";
 
+import { resolveRemoteClaudeLaunchOptions } from "../remoteClaude.ts";
 import { resolveRemoteCodexLaunchOptions } from "../remoteCodex.ts";
 import { ExecutionTargetService } from "../Services/ExecutionTargetService.ts";
 import {
@@ -32,31 +33,61 @@ const makeExecutionTargetRuntime = Effect.gen(function* () {
       return { target, input } as const;
     }
 
+    const sshConnection = {
+      host: connection.host,
+      ...(connection.port !== undefined ? { port: connection.port } : {}),
+      ...(connection.user !== undefined ? { user: connection.user } : {}),
+      ...(connection.password !== undefined ? { password: connection.password } : {}),
+    };
     const requestedCodexOptions = input.providerOptions?.codex;
-    const requestedBinaryPath = requestedCodexOptions?.binaryPath ?? connection.codexBinaryPath;
+    const requestedCodexBinaryPath =
+      requestedCodexOptions?.binaryPath ?? connection.codexBinaryPath;
     const requestedHomePath = requestedCodexOptions?.homePath ?? connection.codexHomePath;
-    const resolvedCodexOptions = yield* Effect.tryPromise({
-      try: () =>
-        resolveRemoteCodexLaunchOptions({
-          targetLabel: target.label,
-          connection: {
-            host: connection.host,
-            ...(connection.port !== undefined ? { port: connection.port } : {}),
-            ...(connection.user !== undefined ? { user: connection.user } : {}),
-            ...(connection.password !== undefined ? { password: connection.password } : {}),
-          },
-          ...(requestedBinaryPath !== undefined ? { binaryPath: requestedBinaryPath } : {}),
-          ...(requestedHomePath !== undefined ? { homePath: requestedHomePath } : {}),
-        }),
-      catch: (cause) =>
-        new ExecutionTargetRuntimeError({
-          message:
-            cause instanceof Error
-              ? cause.message
-              : `Failed to resolve Codex CLI on target '${target.label}'.`,
-          cause,
-        }),
-    });
+    const resolvedCodexOptions =
+      input.provider === "codex"
+        ? yield* Effect.tryPromise({
+            try: () =>
+              resolveRemoteCodexLaunchOptions({
+                targetLabel: target.label,
+                connection: sshConnection,
+                ...(requestedCodexBinaryPath !== undefined
+                  ? { binaryPath: requestedCodexBinaryPath }
+                  : {}),
+                ...(requestedHomePath !== undefined ? { homePath: requestedHomePath } : {}),
+              }),
+            catch: (cause) =>
+              new ExecutionTargetRuntimeError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : `Failed to resolve Codex CLI on target '${target.label}'.`,
+                cause,
+              }),
+          })
+        : undefined;
+    const requestedClaudeBinaryPath =
+      input.providerOptions?.claudeAgent?.binaryPath ?? connection.claudeBinaryPath;
+    const resolvedClaudeOptions =
+      input.provider === "claudeAgent"
+        ? yield* Effect.tryPromise({
+            try: () =>
+              resolveRemoteClaudeLaunchOptions({
+                targetLabel: target.label,
+                connection: sshConnection,
+                ...(requestedClaudeBinaryPath !== undefined
+                  ? { binaryPath: requestedClaudeBinaryPath }
+                  : {}),
+              }),
+            catch: (cause) =>
+              new ExecutionTargetRuntimeError({
+                message:
+                  cause instanceof Error
+                    ? cause.message
+                    : `Failed to resolve Claude Code CLI on target '${target.label}'.`,
+                cause,
+              }),
+          })
+        : undefined;
 
     return {
       target,
@@ -65,10 +96,24 @@ const makeExecutionTargetRuntime = Effect.gen(function* () {
         targetId: target.id,
         providerOptions: {
           ...input.providerOptions,
-          codex: {
-            binaryPath: resolvedCodexOptions.binaryPath,
-            ...(resolvedCodexOptions.homePath ? { homePath: resolvedCodexOptions.homePath } : {}),
-          },
+          ...(resolvedCodexOptions
+            ? {
+                codex: {
+                  binaryPath: resolvedCodexOptions.binaryPath,
+                  ...(resolvedCodexOptions.homePath
+                    ? { homePath: resolvedCodexOptions.homePath }
+                    : {}),
+                },
+              }
+            : {}),
+          ...(resolvedClaudeOptions
+            ? {
+                claudeAgent: {
+                  ...input.providerOptions?.claudeAgent,
+                  binaryPath: resolvedClaudeOptions.binaryPath,
+                },
+              }
+            : {}),
         },
       },
     } as const;

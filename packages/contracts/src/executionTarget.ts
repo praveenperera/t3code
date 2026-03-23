@@ -45,6 +45,7 @@ const ExecutionTargetSshConnection = Schema.Struct({
   user: Schema.optional(TrimmedNonEmptyString),
   password: Schema.optional(Schema.String),
   passwordEnvVar: Schema.optional(TrimmedNonEmptyString),
+  claudeBinaryPath: Schema.optional(TrimmedNonEmptyString),
   codexBinaryPath: Schema.optional(TrimmedNonEmptyString),
   codexHomePath: Schema.optional(TrimmedNonEmptyString),
 });

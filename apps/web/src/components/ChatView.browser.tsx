@@ -22,6 +22,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { render } from "vitest-browser-react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
+import {
+  INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
+  type TerminalContextDraft,
+} from "../lib/terminalContext";
 import { isMacPlatform } from "../lib/utils";
 import { getRouter } from "../router";
 import { useStore } from "../store";
@@ -148,6 +152,25 @@ function createAssistantMessage(options: { id: MessageId; text: string; offsetSe
     streaming: false,
     createdAt: isoAt(options.offsetSeconds),
     updatedAt: isoAt(options.offsetSeconds + 1),
+  };
+}
+
+function createTerminalContext(input: {
+  id: string;
+  terminalLabel: string;
+  lineStart: number;
+  lineEnd: number;
+  text: string;
+}): TerminalContextDraft {
+  return {
+    id: input.id,
+    threadId: THREAD_ID,
+    terminalId: `terminal-${input.id}`,
+    terminalLabel: input.terminalLabel,
+    lineStart: input.lineStart,
+    lineEnd: input.lineEnd,
+    text: input.text,
+    createdAt: NOW_ISO,
   };
 }
 
@@ -351,6 +374,8 @@ function createSnapshotWithLongProposedPlan(): OrchestrationReadModel {
                 id: "plan-browser-test",
                 turnId: null,
                 planMarkdown,
+                implementedAt: null,
+                implementationThreadId: null,
                 createdAt: isoAt(1_000),
                 updatedAt: isoAt(1_001),
               },
@@ -535,6 +560,13 @@ async function waitForComposerEditor(): Promise<HTMLElement> {
   return waitForElement(
     () => document.querySelector<HTMLElement>('[contenteditable="true"]'),
     "Unable to find composer editor.",
+  );
+}
+
+async function waitForSendButton(): Promise<HTMLButtonElement> {
+  return waitForElement(
+    () => document.querySelector<HTMLButtonElement>('button[aria-label="Send message"]'),
+    "Unable to find send button.",
   );
 }
 
@@ -728,6 +760,8 @@ describe("ChatView timeline estimator parity (full app)", () => {
       draftsByThreadId: {},
       draftThreadsByThreadId: {},
       projectDraftThreadIdByProjectId: {},
+      stickyModel: null,
+      stickyModelOptions: {},
     });
     useStore.setState({
       projects: [],
@@ -1020,6 +1054,166 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("keeps backspaced terminal context pills removed when a new one is added", async () => {
+    const removedLabel = "Terminal 1 lines 1-2";
+    const addedLabel = "Terminal 2 lines 9-10";
+    useComposerDraftStore.getState().addTerminalContext(
+      THREAD_ID,
+      createTerminalContext({
+        id: "ctx-removed",
+        terminalLabel: "Terminal 1",
+        lineStart: 1,
+        lineEnd: 2,
+        text: "bun i\nno changes",
+      }),
+    );
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-terminal-pill-backspace" as MessageId,
+        targetText: "terminal pill backspace target",
+      }),
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(document.body.textContent).toContain(removedLabel);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      const composerEditor = await waitForComposerEditor();
+      composerEditor.focus();
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Backspace",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(useComposerDraftStore.getState().draftsByThreadId[THREAD_ID]).toBeUndefined();
+          expect(document.body.textContent).not.toContain(removedLabel);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      useComposerDraftStore.getState().addTerminalContext(
+        THREAD_ID,
+        createTerminalContext({
+          id: "ctx-added",
+          terminalLabel: "Terminal 2",
+          lineStart: 9,
+          lineEnd: 10,
+          text: "git status\nOn branch main",
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          const draft = useComposerDraftStore.getState().draftsByThreadId[THREAD_ID];
+          expect(draft?.terminalContexts.map((context) => context.id)).toEqual(["ctx-added"]);
+          expect(document.body.textContent).toContain(addedLabel);
+          expect(document.body.textContent).not.toContain(removedLabel);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("disables send when the composer only contains an expired terminal pill", async () => {
+    const expiredLabel = "Terminal 1 line 4";
+    useComposerDraftStore.getState().addTerminalContext(
+      THREAD_ID,
+      createTerminalContext({
+        id: "ctx-expired-only",
+        terminalLabel: "Terminal 1",
+        lineStart: 4,
+        lineEnd: 4,
+        text: "",
+      }),
+    );
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-expired-pill-disabled" as MessageId,
+        targetText: "expired pill disabled target",
+      }),
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(document.body.textContent).toContain(expiredLabel);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      const sendButton = await waitForSendButton();
+      expect(sendButton.disabled).toBe(true);
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("warns when sending text while omitting expired terminal pills", async () => {
+    const expiredLabel = "Terminal 1 line 4";
+    useComposerDraftStore.getState().addTerminalContext(
+      THREAD_ID,
+      createTerminalContext({
+        id: "ctx-expired-send-warning",
+        terminalLabel: "Terminal 1",
+        lineStart: 4,
+        lineEnd: 4,
+        text: "",
+      }),
+    );
+    useComposerDraftStore
+      .getState()
+      .setPrompt(THREAD_ID, `yoo${INLINE_TERMINAL_CONTEXT_PLACEHOLDER}waddup`);
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-expired-pill-warning" as MessageId,
+        targetText: "expired pill warning target",
+      }),
+    });
+
+    try {
+      await vi.waitFor(
+        () => {
+          expect(document.body.textContent).toContain(expiredLabel);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      const sendButton = await waitForSendButton();
+      expect(sendButton.disabled).toBe(false);
+      sendButton.click();
+
+      await vi.waitFor(
+        () => {
+          expect(document.body.textContent).toContain(
+            "Expired terminal context omitted from message",
+          );
+          expect(document.body.textContent).not.toContain(expiredLabel);
+          expect(document.body.textContent).toContain("yoowaddup");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("shows a pointer cursor for the running stop button", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
@@ -1124,6 +1318,198 @@ describe("ChatView timeline estimator parity (full app)", () => {
         },
         { timeout: 8_000, interval: 16 },
       );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("snapshots sticky codex settings into a new draft thread", async () => {
+    useComposerDraftStore.setState({
+      stickyModel: "gpt-5.3-codex",
+      stickyModelOptions: {
+        codex: {
+          reasoningEffort: "medium",
+          fastMode: true,
+        },
+      },
+    });
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-sticky-codex-traits-test" as MessageId,
+        targetText: "sticky codex traits test",
+      }),
+    });
+
+    try {
+      const newThreadButton = page.getByTestId("new-thread-button");
+      await expect.element(newThreadButton).toBeInTheDocument();
+
+      await newThreadButton.click();
+
+      const newThreadPath = await waitForURL(
+        mounted.router,
+        (path) => UUID_ROUTE_RE.test(path),
+        "Route should have changed to a new draft thread UUID.",
+      );
+      const newThreadId = newThreadPath.slice(1) as ThreadId;
+
+      expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toMatchObject({
+        model: "gpt-5.3-codex",
+        provider: "codex",
+        modelOptions: {
+          codex: {
+            fastMode: true,
+          },
+        },
+      });
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("hydrates the provider alongside a sticky claude model", async () => {
+    useComposerDraftStore.setState({
+      stickyModel: "claude-opus-4-6",
+      stickyModelOptions: {
+        claudeAgent: {
+          effort: "max",
+          fastMode: true,
+        },
+      },
+    });
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-sticky-claude-model-test" as MessageId,
+        targetText: "sticky claude model test",
+      }),
+    });
+
+    try {
+      const newThreadButton = page.getByTestId("new-thread-button");
+      await expect.element(newThreadButton).toBeInTheDocument();
+
+      await newThreadButton.click();
+
+      const newThreadPath = await waitForURL(
+        mounted.router,
+        (path) => UUID_ROUTE_RE.test(path),
+        "Route should have changed to a new sticky claude draft thread UUID.",
+      );
+      const newThreadId = newThreadPath.slice(1) as ThreadId;
+
+      expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toMatchObject({
+        provider: "claudeAgent",
+        model: "claude-opus-4-6",
+        modelOptions: {
+          claudeAgent: {
+            effort: "max",
+            fastMode: true,
+          },
+        },
+      });
+      await expect.element(page.getByText("Claude Opus 4.6")).toBeInTheDocument();
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("falls back to defaults when no sticky composer settings exist", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-default-codex-traits-test" as MessageId,
+        targetText: "default codex traits test",
+      }),
+    });
+
+    try {
+      const newThreadButton = page.getByTestId("new-thread-button");
+      await expect.element(newThreadButton).toBeInTheDocument();
+
+      await newThreadButton.click();
+
+      const newThreadPath = await waitForURL(
+        mounted.router,
+        (path) => UUID_ROUTE_RE.test(path),
+        "Route should have changed to a new draft thread UUID.",
+      );
+      const newThreadId = newThreadPath.slice(1) as ThreadId;
+
+      expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toBeUndefined();
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("prefers draft state over sticky composer settings and defaults", async () => {
+    useComposerDraftStore.setState({
+      stickyModel: "gpt-5.3-codex",
+      stickyModelOptions: {
+        codex: {
+          reasoningEffort: "medium",
+          fastMode: true,
+        },
+      },
+    });
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-draft-codex-traits-precedence-test" as MessageId,
+        targetText: "draft codex traits precedence test",
+      }),
+    });
+
+    try {
+      const newThreadButton = page.getByTestId("new-thread-button");
+      await expect.element(newThreadButton).toBeInTheDocument();
+
+      await newThreadButton.click();
+
+      const threadPath = await waitForURL(
+        mounted.router,
+        (path) => UUID_ROUTE_RE.test(path),
+        "Route should have changed to a sticky draft thread UUID.",
+      );
+      const threadId = threadPath.slice(1) as ThreadId;
+
+      expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toMatchObject({
+        model: "gpt-5.3-codex",
+        modelOptions: {
+          codex: {
+            fastMode: true,
+          },
+        },
+      });
+
+      useComposerDraftStore.getState().setModel(threadId, "gpt-5.4");
+      useComposerDraftStore.getState().setModelOptions(threadId, {
+        codex: {
+          reasoningEffort: "low",
+          fastMode: true,
+        },
+      });
+
+      await newThreadButton.click();
+
+      await waitForURL(
+        mounted.router,
+        (path) => path === threadPath,
+        "New-thread should reuse the existing project draft thread.",
+      );
+      expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toMatchObject({
+        model: "gpt-5.4",
+        modelOptions: {
+          codex: {
+            reasoningEffort: "low",
+            fastMode: true,
+          },
+        },
+      });
     } finally {
       await mounted.cleanup();
     }

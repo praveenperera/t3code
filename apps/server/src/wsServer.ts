@@ -439,7 +439,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   const getTargetGitCore = (
     target: ExecutionTarget,
-  ): Effect.Effect<GitCoreShape, never, GitCore | FileSystem.FileSystem | Path.Path> => {
+  ): Effect.Effect<
+    GitCoreShape,
+    never,
+    GitCore | ServerConfig | FileSystem.FileSystem | Path.Path
+  > => {
     if (target.connection.kind === "local") {
       return Effect.gen(function* () {
         return yield* GitCore;
@@ -574,7 +578,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           };
 
           const attachmentPath = resolveAttachmentPath({
-            stateDir: serverConfig.stateDir,
+            attachmentsDir: serverConfig.attachmentsDir,
             attachment: persistedAttachment,
           });
           if (!attachmentPath) {
@@ -644,11 +648,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             !normalizedRelativePath.includes("/") && !normalizedRelativePath.includes(".");
           const filePath = isIdLookup
             ? resolveAttachmentPathById({
-                stateDir: serverConfig.stateDir,
+                attachmentsDir: serverConfig.attachmentsDir,
                 attachmentId: normalizedRelativePath,
               })
             : resolveAttachmentRelativePath({
-                stateDir: serverConfig.stateDir,
+                attachmentsDir: serverConfig.attachmentsDir,
                 relativePath: normalizedRelativePath,
               });
           if (!filePath) {

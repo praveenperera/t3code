@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, FileSystem, Layer } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -22,6 +20,7 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers
 import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRuntimeIngestion";
 import { RuntimeReceiptBusLive } from "./orchestration/Layers/RuntimeReceiptBus";
 import { ProviderUnsupportedError } from "./provider/Errors";
+import { makeClaudeAdapterLive } from "./provider/Layers/ClaudeAdapter";
 import { makeCodexAdapterLive } from "./provider/Layers/CodexAdapter";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry";
 import { makeProviderServiceLive } from "./provider/Layers/ProviderService";
@@ -50,9 +49,7 @@ export function makeServerProviderLayer(): Layer.Layer<
   SqlClient.SqlClient | ServerConfig | FileSystem.FileSystem | AnalyticsService
 > {
   return Effect.gen(function* () {
-    const { stateDir } = yield* ServerConfig;
-    const providerLogsDir = path.join(stateDir, "logs", "provider");
-    const providerEventLogPath = path.join(providerLogsDir, "events.log");
+    const { providerEventLogPath } = yield* ServerConfig;
     const nativeEventLogger = yield* makeEventNdjsonLogger(providerEventLogPath, {
       stream: "native",
     });
@@ -71,8 +68,12 @@ export function makeServerProviderLayer(): Layer.Layer<
     const codexAdapterLayer = makeCodexAdapterLive(
       nativeEventLogger ? { nativeEventLogger } : undefined,
     ).pipe(Layer.provide(executionTargetRuntimeLayer));
+    const claudeAdapterLayer = makeClaudeAdapterLive(
+      nativeEventLogger ? { nativeEventLogger } : undefined,
+    ).pipe(Layer.provide(executionTargetRuntimeLayer));
     const adapterRegistryLayer = ProviderAdapterRegistryLive.pipe(
       Layer.provide(codexAdapterLayer),
+      Layer.provide(claudeAdapterLayer),
       Layer.provideMerge(providerSessionDirectoryLayer),
     );
     const providerServiceLayer = makeProviderServiceLive(

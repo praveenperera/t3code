@@ -173,6 +173,7 @@ export function gitRunStackedActionMutationOptions(input: {
   cwd: string | null;
   targetId?: ExecutionTargetId | null;
   queryClient: QueryClient;
+  model?: string | null;
 }) {
   return mutationOptions({
     mutationKey: gitMutationKeys.runStackedAction(input.cwd, input.targetId ?? null),
@@ -196,6 +197,7 @@ export function gitRunStackedActionMutationOptions(input: {
         ...(commitMessage ? { commitMessage } : {}),
         ...(featureBranch ? { featureBranch } : {}),
         ...(filePaths ? { filePaths } : {}),
+        ...(input.model ? { model: input.model } : {}),
       });
     },
     onSettled: async () => {

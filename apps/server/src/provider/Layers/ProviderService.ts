@@ -89,7 +89,12 @@ function toRuntimeStatus(session: ProviderSession): "starting" | "running" | "st
 
 function toRuntimePayloadFromSession(
   session: ProviderSession,
-  extra?: { readonly providerOptions?: unknown },
+  extra?: {
+    readonly modelOptions?: unknown;
+    readonly providerOptions?: unknown;
+    readonly lastRuntimeEvent?: string;
+    readonly lastRuntimeEventAt?: string;
+  },
 ): Record<string, unknown> {
   return {
     targetId: session.targetId ?? LOCAL_EXECUTION_TARGET_ID,
@@ -97,8 +102,24 @@ function toRuntimePayloadFromSession(
     model: session.model ?? null,
     activeTurnId: session.activeTurnId ?? null,
     lastError: session.lastError ?? null,
+    ...(extra?.modelOptions !== undefined ? { modelOptions: extra.modelOptions } : {}),
     ...(extra?.providerOptions !== undefined ? { providerOptions: extra.providerOptions } : {}),
+    ...(extra?.lastRuntimeEvent !== undefined ? { lastRuntimeEvent: extra.lastRuntimeEvent } : {}),
+    ...(extra?.lastRuntimeEventAt !== undefined
+      ? { lastRuntimeEventAt: extra.lastRuntimeEventAt }
+      : {}),
   };
+}
+
+function readPersistedModelOptions(
+  runtimePayload: ProviderRuntimeBinding["runtimePayload"],
+): Record<string, unknown> | undefined {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return undefined;
+  }
+  const raw = "modelOptions" in runtimePayload ? runtimePayload.modelOptions : undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  return raw as Record<string, unknown>;
 }
 
 function readPersistedProviderOptions(
@@ -152,7 +173,12 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
     const upsertSessionBinding = (
       session: ProviderSession,
       threadId: ThreadId,
-      extra?: { readonly providerOptions?: unknown },
+      extra?: {
+        readonly modelOptions?: unknown;
+        readonly providerOptions?: unknown;
+        readonly lastRuntimeEvent?: string;
+        readonly lastRuntimeEventAt?: string;
+      },
     ) =>
       directory.upsert({
         threadId,
@@ -168,7 +194,6 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
     const adapters = yield* Effect.forEach(providers, (provider) =>
       registry.getByProvider(provider),
     );
-
     const processRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
       publishRuntimeEvent(event);
 
@@ -216,6 +241,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         }
 
         const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
+        const persistedModelOptions = readPersistedModelOptions(input.binding.runtimePayload);
         const persistedProviderOptions = readPersistedProviderOptions(input.binding.runtimePayload);
 
         const resumed = yield* adapter.startSession({
@@ -223,6 +249,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           provider: input.binding.provider,
           targetId: input.binding.targetId ?? LOCAL_EXECUTION_TARGET_ID,
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
+          ...(persistedModelOptions ? { modelOptions: persistedModelOptions } : {}),
           ...(persistedProviderOptions ? { providerOptions: persistedProviderOptions } : {}),
           ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
           runtimeMode: input.binding.runtimeMode ?? "full-access",
@@ -285,8 +312,17 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           threadId,
           provider: parsed.provider ?? "codex",
         };
+        const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
+        const effectiveResumeCursor =
+          input.resumeCursor ??
+          (persistedBinding?.provider === input.provider
+            ? persistedBinding.resumeCursor
+            : undefined);
         const adapter = yield* registry.getByProvider(input.provider);
-        const session = yield* adapter.startSession(input);
+        const session = yield* adapter.startSession({
+          ...input,
+          ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
+        });
 
         if (session.provider !== adapter.provider) {
           return yield* toValidationError(
@@ -296,6 +332,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         }
 
         yield* upsertSessionBinding(session, threadId, {
+          modelOptions: input.modelOptions,
           providerOptions: input.providerOptions,
         });
         yield* analytics.record("provider.session.started", {
@@ -506,6 +543,17 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
     const runStopAll = () =>
       Effect.gen(function* () {
         const threadIds = yield* directory.listThreadIds();
+        const activeSessions = yield* Effect.forEach(adapters, (adapter) =>
+          adapter.listSessions(),
+        ).pipe(
+          Effect.map((sessionsByAdapter) => sessionsByAdapter.flatMap((sessions) => sessions)),
+        );
+        yield* Effect.forEach(activeSessions, (session) =>
+          upsertSessionBinding(session, session.threadId, {
+            lastRuntimeEvent: "provider.stopAll",
+            lastRuntimeEventAt: new Date().toISOString(),
+          }),
+        ).pipe(Effect.asVoid);
         yield* Effect.forEach(adapters, (adapter) => adapter.stopAll()).pipe(Effect.asVoid);
         yield* Effect.forEach(threadIds, (threadId) =>
           directory.getProvider(threadId).pipe(

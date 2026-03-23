@@ -20,6 +20,7 @@ import {
   resolveQuickAction,
   summarizeGitResult,
 } from "./GitActionsControl.logic";
+import { useAppSettings } from "~/appSettings";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -164,6 +165,7 @@ export default function GitActionsControl({
   activeThreadId,
   targetId,
 }: GitActionsControlProps) {
+  const { settings } = useAppSettings();
   const threadToastData = useMemo(
     () => (activeThreadId ? { threadId: activeThreadId } : undefined),
     [activeThreadId],
@@ -202,7 +204,12 @@ export default function GitActionsControl({
   const initMutation = useMutation(gitInitMutationOptions({ cwd: gitCwd, targetId, queryClient }));
 
   const runImmediateGitActionMutation = useMutation(
-    gitRunStackedActionMutationOptions({ cwd: gitCwd, targetId, queryClient }),
+    gitRunStackedActionMutationOptions({
+      cwd: gitCwd,
+      targetId,
+      queryClient,
+      model: settings.textGenerationModel ?? null,
+    }),
   );
   const pullMutation = useMutation(gitPullMutationOptions({ cwd: gitCwd, targetId, queryClient }));
 
