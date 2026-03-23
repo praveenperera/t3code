@@ -7,6 +7,7 @@ import * as Path from "node:path";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -16,7 +17,6 @@ import {
   shell,
 } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
-import * as Effect from "effect/Effect";
 import type {
   DesktopTheme,
   DesktopUpdateActionResult,
@@ -25,8 +25,9 @@ import type {
 import { autoUpdater } from "electron-updater";
 
 import type { ContextMenuItem } from "@t3tools/contracts";
-import { NetService } from "@t3tools/shared/Net";
+import { Effect } from "effect";
 import { RotatingFileSink } from "@t3tools/shared/logging";
+import { NetService } from "@t3tools/shared/Net";
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { syncShellEnvironment } from "./syncShellEnvironment";
 import { getAutoUpdateDisabledReason, shouldBroadcastDownloadProgress } from "./updateState";
@@ -588,6 +589,19 @@ function configureApplicationMenu(): void {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
           click: () => dispatchMenuAction("open-settings"),
+        },
+        { type: "separator" },
+        {
+          label: "Copy LAN URL",
+          click: () => {
+            const lanUrl = getLanUrl();
+            if (!lanUrl) {
+              void dialog.showMessageBox({ message: "No network interface found", type: "warning" });
+              return;
+            }
+            clipboard.writeText(lanUrl);
+            void dialog.showMessageBox({ message: `Copied to clipboard:\n${lanUrl}`, type: "info" });
+          },
         },
         { type: "separator" },
         { role: "services" },
