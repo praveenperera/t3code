@@ -10,14 +10,14 @@ import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { resolveShortcutCommand } from "../keybindings";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
-import { Sidebar, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 import { resolveSidebarNewThreadEnvMode } from "~/components/Sidebar.logic";
 import { useAppSettings } from "~/appSettings";
+import { Sidebar, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
-const CHAT_SIDEBAR_WIDTH_STORAGE_KEY = "chat-sidebar-width";
-const CHAT_SIDEBAR_MIN_WIDTH = 15 * 16;
-const CHAT_SIDEBAR_MAX_WIDTH = 34 * 16;
+const THREAD_SIDEBAR_WIDTH_STORAGE_KEY = "chat_thread_sidebar_width";
+const THREAD_SIDEBAR_MIN_WIDTH = 13 * 16;
+const THREAD_MAIN_CONTENT_MIN_WIDTH = 40 * 16;
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
@@ -120,9 +120,10 @@ function ChatRouteLayout() {
         collapsible="offcanvas"
         className="border-r border-border bg-card text-foreground"
         resizable={{
-          minWidth: CHAT_SIDEBAR_MIN_WIDTH,
-          maxWidth: CHAT_SIDEBAR_MAX_WIDTH,
-          storageKey: CHAT_SIDEBAR_WIDTH_STORAGE_KEY,
+          minWidth: THREAD_SIDEBAR_MIN_WIDTH,
+          shouldAcceptWidth: ({ nextWidth, wrapper }) =>
+            wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
+          storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
         }}
       >
         <ThreadSidebar />

@@ -8,12 +8,9 @@
  */
 import { Layer } from "effect";
 
-import { GitServiceLive } from "../../git/Layers/GitService.ts";
 import { CheckpointStore } from "../Services/CheckpointStore.ts";
 import { makeCheckpointStoreShape } from "../makeCheckpointStoreShape.ts";
 
 const makeCheckpointStore = makeCheckpointStoreShape();
 
-export const CheckpointStoreLive = Layer.effect(CheckpointStore, makeCheckpointStore).pipe(
-  Layer.provideMerge(GitServiceLive),
-);
+export const CheckpointStoreLive = Layer.effect(CheckpointStore, makeCheckpointStore);

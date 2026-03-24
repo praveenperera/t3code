@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, Layer } from "effect";
+import { Effect, FileSystem, Layer, Path } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { CheckpointDiffQueryLive } from "./checkpointing/Layers/CheckpointDiffQuery";
@@ -33,15 +33,31 @@ import { TerminalManagerLive } from "./terminal/Layers/Manager";
 import { KeybindingsLive } from "./keybindings";
 import { GitManagerLive } from "./git/Layers/GitManager";
 import { GitCoreLive } from "./git/Layers/GitCore";
+import { GitServiceLive } from "./git/Layers/GitService";
 import { GitHubCliLive } from "./git/Layers/GitHubCli";
 import { CodexTextGenerationLive } from "./git/Layers/CodexTextGeneration";
-import { GitServiceLive } from "./git/Layers/GitService";
-import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
-import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
+import { PtyAdapter } from "./terminal/Services/PTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { ExecutionTargetServiceLive } from "./executionTarget/Layers/ExecutionTargetService";
 import { ExecutionTargetRuntimeLive } from "./executionTarget/Layers/ExecutionTargetRuntime";
 import { PortForwardManagerLive } from "./portForward/Layers/PortForwardManager";
+
+type RuntimePtyAdapterLoader = {
+  layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
+};
+
+const runtimePtyAdapterLoaders = {
+  bun: () => import("./terminal/Layers/BunPTY"),
+  node: () => import("./terminal/Layers/NodePTY"),
+} satisfies Record<string, () => Promise<RuntimePtyAdapterLoader>>;
+
+const makeRuntimePtyAdapterLayer = () =>
+  Effect.gen(function* () {
+    const runtime = process.versions.bun !== undefined ? "bun" : "node";
+    const loader = runtimePtyAdapterLoaders[runtime];
+    const ptyAdapterModule = yield* Effect.promise<RuntimePtyAdapterLoader>(loader);
+    return ptyAdapterModule.layer;
+  }).pipe(Layer.unwrap);
 
 export function makeServerProviderLayer(): Layer.Layer<
   ProviderService | ProviderSessionDirectory,
@@ -84,11 +100,11 @@ export function makeServerProviderLayer(): Layer.Layer<
 }
 
 export function makeServerRuntimeServicesLayer() {
-  const gitCoreLayer = GitCoreLive.pipe(Layer.provideMerge(GitServiceLive));
   const textGenerationLayer = CodexTextGenerationLive;
   const executionTargetServiceLayer = ExecutionTargetServiceLive.pipe(
     Layer.provide(ExecutionTargetRepositoryLive),
   );
+  const gitCoreLayer = GitCoreLive.pipe(Layer.provideMerge(GitServiceLive));
 
   const orchestrationLayer = OrchestrationEngineLive.pipe(
     Layer.provide(OrchestrationProjectionPipelineLive),
@@ -119,7 +135,7 @@ export function makeServerRuntimeServicesLayer() {
   );
   const providerCommandReactorLayer = ProviderCommandReactorLive.pipe(
     Layer.provideMerge(runtimeServicesLayer),
-    Layer.provideMerge(gitCoreLayer),
+    Layer.provideMerge(GitCoreLive),
     Layer.provideMerge(textGenerationLayer),
   );
   const checkpointReactorLayer = CheckpointReactorLive.pipe(
@@ -133,11 +149,7 @@ export function makeServerRuntimeServicesLayer() {
 
   const terminalLayer = TerminalManagerLive.pipe(
     Layer.provide(executionTargetServiceLayer),
-    Layer.provide(
-      typeof Bun !== "undefined" && process.platform !== "win32"
-        ? BunPtyAdapterLive
-        : NodePtyAdapterLive,
-    ),
+    Layer.provide(makeRuntimePtyAdapterLayer()),
   );
   const executionTargetRuntimeLayer = ExecutionTargetRuntimeLive.pipe(
     Layer.provide(executionTargetServiceLayer),
@@ -145,7 +157,7 @@ export function makeServerRuntimeServicesLayer() {
   const portForwardLayer = PortForwardManagerLive.pipe(Layer.provide(executionTargetServiceLayer));
 
   const gitManagerLayer = GitManagerLive.pipe(
-    Layer.provideMerge(gitCoreLayer),
+    Layer.provideMerge(GitCoreLive),
     Layer.provideMerge(GitHubCliLive),
     Layer.provideMerge(textGenerationLayer),
   );
